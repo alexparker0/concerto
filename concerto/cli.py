@@ -311,11 +311,28 @@ def cmd_ai_eval(args: argparse.Namespace) -> int:
     print(f"Report: {out}")
     return 0 if rep.passed else 1
 
+def cmd_gui(args: argparse.Namespace) -> int:
+    """Launch the interactive Concerto desktop GUI workstation."""
+    from .gui.app import run_gui
+    return run_gui(initial_file=getattr(args, "file", None))
+
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="concerto", description=__doc__)
     p.add_argument("--version", action="version", version=f"concerto {__version__}")
+    if argv is None and len(sys.argv) == 1:
+        try:
+            from .gui.app import run_gui
+            return run_gui()
+        except Exception:
+            p.print_help()
+            return 0
+
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    g = sub.add_parser("gui", help="launch interactive Concerto desktop workstation")
+    g.add_argument("--file", "-f", default=None, help="initial audio file to load")
+    g.set_defaults(func=cmd_gui)
 
     a = sub.add_parser("analyse", help="analyse a stereo recording")
     a.add_argument("input")

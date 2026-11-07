@@ -25,10 +25,19 @@ class NativeCoreUnavailable(RuntimeError):
 
 
 def _find_library() -> Path | None:
+    import sys
     candidates = [
         Path(__file__).resolve().parent.parent / "native" / "build" / "bin",
         Path(__file__).resolve().parent.parent / "native" / "build",
     ]
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            meipass = Path(sys._MEIPASS)
+            candidates.insert(0, meipass / "native" / "build" / "bin")
+            candidates.insert(0, meipass)
+        exe_dir = Path(sys.executable).parent
+        candidates.insert(0, exe_dir)
+        candidates.insert(0, exe_dir / "native" / "build" / "bin")
     for d in candidates:
         for name in ("concerto_core.dll", "libconcerto_core.dll", "libconcerto_core.so",
                      "libconcerto_core.dylib"):

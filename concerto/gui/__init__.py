@@ -1,0 +1,1 @@
+"""Concerto GUI application package."""

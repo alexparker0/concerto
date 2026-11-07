@@ -1,0 +1,14 @@
+# Concerto — Desktop GUI & Standalone Build Dependencies
+-r requirements.txt
+
+# Modern Qt6 desktop framework
+PySide6>=6.6.0
+
+# Hardware-accelerated real-time 2D audio plotting & correlation analysis
+pyqtgraph>=0.13.0
+
+# Interactive audio playback & low-latency PortAudio auditioning
+sounddevice>=0.4.6
+
+# Standalone executable compiler
+pyinstaller>=6.0.0
