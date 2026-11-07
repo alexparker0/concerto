@@ -10,6 +10,5 @@ reports/
 .tmp-pyyaml/
 dist/
 build/
-*.spec
 routing_test.flac
 demo_stereo.flac
