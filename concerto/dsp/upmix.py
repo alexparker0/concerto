@@ -53,9 +53,32 @@ class RenderConfig:
 
 def load_config(path: str | Path) -> dict:
     """Load a TOML config file into a flat dict of render parameters."""
-    with open(path, "rb") as fh:
+    import sys
+    p = Path(path)
+    if not p.exists() and getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            candidates = [
+                Path(sys._MEIPASS) / path,
+                Path(sys._MEIPASS) / "configs" / p.name,
+                Path(sys._MEIPASS) / p.name,
+            ]
+            for c in candidates:
+                if c.exists():
+                    p = c
+                    break
+        if not p.exists():
+            exe_dir = Path(sys.executable).parent
+            candidates = [
+                exe_dir / path,
+                exe_dir / "configs" / p.name,
+                exe_dir / p.name,
+            ]
+            for c in candidates:
+                if c.exists():
+                    p = c
+                    break
+    with open(p, "rb") as fh:
         raw = tomllib.load(fh)
-    out, sur, dec, cen, adv = raw.get("output", {}), raw.get("surround", {}), raw.get("decorrelation", {}), raw.get("centre", {}), raw.get("adaptive", {})
     return {
         "layout": out.get("layout", "7.1"),
         "bit_depth": out.get("bit_depth", 24),
