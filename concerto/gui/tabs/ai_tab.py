@@ -677,12 +677,15 @@ class AiTab(QWidget):
         # Stop any active auditioning
         self._stop_audition()
 
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent
         model_idx = self.combo_model.currentIndex()
         onnx_model: str | None = None
         if model_idx == 0:
-            onnx_model = "BS-Roformer-Viperx-1297.onnx"
+            p = repo_root / "BS-Roformer-Viperx-1297.onnx"
+            onnx_model = str(p) if p.is_file() else "BS-Roformer-Viperx-1297.onnx"
         elif model_idx == 1:
-            onnx_model = "melband.onnx"
+            p = repo_root / "melband.onnx"
+            onnx_model = str(p) if p.is_file() else "melband.onnx"
         elif model_idx == 2:
             onnx_model = None  # Demucs
         elif model_idx == 3:
@@ -691,7 +694,6 @@ class AiTab(QWidget):
                 QMessageBox.warning(self, "Custom Model", "Please select a valid custom .onnx model.")
                 return
             onnx_model = custom_p
-
         no_cache = self.chk_no_cache.isChecked()
 
         # Update UI state

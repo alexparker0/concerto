@@ -71,7 +71,32 @@ class RenderWorker(QThread):
     def run(self) -> None:
         t_start = time.perf_counter()
         try:
-            cfg = dict(self.cfg)
+            defaults = {
+                "layout": "7.1", "bit_depth": 24, "preserve_front": True,
+                "surround_gain": 0.25, "extraction": "stereo_difference", "stereo_beta": 0.25,
+                "highpass_hz": 150.0, "lowpass_hz": 8000.0, "filter_order": 4,
+                "target_rms_ratio": 0.35, "rms_window_s": 0.4, "gain_tau_s": 2.0,
+                "gain_min": 0.0, "gain_max": 2.0, "decorrelate": True,
+                "coeffs": {
+                    "SL": [0.68, -0.41, 0.23], "SR": [-0.55, 0.37, -0.19],
+                    "BL": [0.31, -0.62, 0.44], "BR": [-0.29, 0.48, -0.57],
+                },
+                "centre_mode": "disabled", "mid_fill_gain": 0.3548, "vocal_gain_db": -6.0,
+                "adaptive": False, "adaptive_beta": False, "beta_min": 0.15,
+                "beta_max": 0.90, "beta_tau_s": 1.5,
+            }
+            try:
+                base_p = Path("configs/default.toml")
+                if not base_p.exists():
+                    base_p = Path(__file__).resolve().parent.parent.parent / "configs" / "default.toml"
+                defaults.update(load_config(base_p))
+            except Exception:
+                pass
+
+            cfg = dict(defaults)
+            if self.cfg:
+                cfg.update(self.cfg)
+
             cfg["layout"] = self.layout
             if self.mode == "baseline":
                 cfg["adaptive"] = False

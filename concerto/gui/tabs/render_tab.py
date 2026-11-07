@@ -623,25 +623,47 @@ class RenderTab(QWidget):
         dither_mode = self.chk_dither.isChecked()
         no_cache = not self.chk_cache.isChecked()
 
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent
+
         # Resolve model path
         onnx_model_arg: str | None = None
         if ai_str == "on":
             sel_model = self.combo_model.currentText()
-            if sel_model.endswith(".onnx"):
-                onnx_model_arg = sel_model
+            if "onnx" in sel_model.lower():
+                cand_names = [sel_model.split()[0], "BS-Roformer-Viperx-1297.onnx", "melband.onnx"]
+                for name in cand_names:
+                    for p in (Path(name), repo_root / name):
+                        if p.is_file():
+                            onnx_model_arg = str(p)
+                            break
+                    if onnx_model_arg:
+                        break
+                if not onnx_model_arg:
+                    onnx_model_arg = sel_model.split()[0]
 
-        # Load base configuration
-        cfg: dict[str, Any] = {}
+        # Load base configuration with guaranteed default fallback
         preset_name = self.combo_preset.currentText()
-        preset_path = Path("configs") / preset_name
-        if not preset_path.exists():
-            preset_path = Path(__file__).resolve().parent.parent.parent / "configs" / preset_name
-        if preset_path.exists():
+        if preset_name == "Custom TOML...":
+            preset_path = Path(self.combo_preset.toolTip())
+        else:
+            candidates = [
+                Path("configs") / preset_name,
+                repo_root / "configs" / preset_name,
+                Path(preset_name),
+            ]
+            preset_path = candidates[0]
+            for c in candidates:
+                if c.is_file():
+                    preset_path = c
+                    break
+
+        try:
+            cfg = load_config(preset_path)
+        except Exception:
             try:
-                cfg = load_config(preset_path)
+                cfg = load_config(repo_root / "configs" / "default.toml")
             except Exception:
                 cfg = {}
-
         # Overlay GUI overrides
         cfg["layout"] = layout_str
         cfg["dither"] = dither_mode

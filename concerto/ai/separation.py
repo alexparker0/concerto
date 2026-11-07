@@ -323,13 +323,34 @@ def separate_stems(left: np.ndarray, right: np.ndarray, sample_rate: int,
         cached = _load_cached_stems(cpath)
         if cached is not None:
             return cached
-
-    if onnx_model_path and Path(onnx_model_path).exists():
-        stems = separate_stems_onnx(left, right, sample_rate, onnx_model_path,
-                                    progress=progress)
-        if use_cache:
-            _save_cached_stems(cpath, stems)
-        return stems
+    if onnx_model_path:
+        p = Path(onnx_model_path)
+        resolved_onnx = None
+        if p.is_file():
+            resolved_onnx = p
+        else:
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            candidates = [
+                repo_root / p,
+                repo_root / p.name,
+                Path.cwd() / p,
+                Path.cwd() / p.name,
+            ]
+            for cand in candidates:
+                if cand.is_file():
+                    resolved_onnx = cand
+                    break
+        if resolved_onnx:
+            stems = separate_stems_onnx(left, right, sample_rate, str(resolved_onnx),
+                                        progress=progress)
+            if use_cache:
+                _save_cached_stems(cpath, stems)
+            return stems
+        else:
+            raise FileNotFoundError(
+                f"ONNX model file not found: '{onnx_model_path}'. "
+                "Please verify the model path or select a valid .onnx file."
+            )
 
     try:
         import torch
@@ -342,10 +363,16 @@ def separate_stems(left: np.ndarray, right: np.ndarray, sample_rate: int,
 
     demucs_sr = 44100
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = get_model(model_name)
+    try:
+        model = get_model(model_name)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to load Demucs model '{model_name}': {exc}. "
+            "Demucs could not retrieve the remote model index (.txt) or weights from Meta/Facebook servers. "
+            "Please check network connection or select a local ONNX model file (e.g. BS-Roformer-Viperx-1297.onnx or melband.onnx)."
+        ) from exc
     model.to(device)
     model.eval()
-
     l = np.asarray(left, dtype=np.float32)
     r = np.asarray(right, dtype=np.float32)
     if sample_rate != demucs_sr:
