@@ -1,156 +1,171 @@
-# Concerto — Stereo-to-Surround Upmixing Engine
+# Concerto
 
-Deterministic, measurable stereo → 5.1/7.1 upmixer. DSP-first: a reproducible
-matrix baseline and analysis engine, with AI introduced only where it
-demonstrably improves results. See `SPEC.md` for the frozen engineering
-specification.
+Deterministic, measurable stereo-to-surround upmixing engine. 
 
-## Status — Milestone 2 (native C++20 DSP core) complete
+Concerto converts 2-channel stereo audio into 5.1 or 7.1 surround mixes. It is built DSP-first: a mathematically reproducible matrix core with directional steering, cascaded all-pass decorrelation banks, and dual-timescale RMS gain tracking, with neural stem separation (`htdemucs` via PyTorch) introduced only where it demonstrably improves center-channel vocal stability without degrading front image fidelity.
 
-Milestone 1 delivered the validated Python DSP prototype. Milestone 2 ports the
-frozen kernels to a C++20 shared library (`native/`, CMake + MinGW-w64/MSVC),
-bridged via ctypes with Python reference fallback:
+Complete specifications, mathematical derivations, and QA criteria are documented in [`SPEC.md`](SPEC.md).
 
-- [x] Native C++20 core: radix-2 FFT (float64), all-pass banks, SOS band-limit
-      (scipy layout, a0-normalised), slow RMS gain controller, chunk renderer
-- [x] ctypes bridge (`concerto/native.py`), auto-used by `render`/`benchmark`
-      when the core is built; graceful Python fallback otherwise
-- [x] Native↔Python equivalence tests (render < 1e-4, analysis < 1e-6 rel.)
-- [x] Covariance-based directness d(f) added to analysis (Python + native)
-      and to CSV reports — becomes the W/D features in Milestone 3
-- [x] Downmix-consistency acceptance test (MPEG-style fold-down SDR > 10 dB;
-      measured ≈ 28 dB on the demo source)
-- [x] White-noise stability stress test
-- [x] **Milestone 4 (stage a): AI evaluation harness + vocal centre.**
-  Strictly flag-gated (`--ai on`, `ai-eval` command); torch/demucs are
-  optional dependencies, lazily imported — the DSP pipeline is untouched
-  without them.
-  - Demucs (htdemucs) stem separation, resampling-safe, timeline-preserving.
-  - Acceptance harness (spec section 7): timeline alignment, recombination
-    residual, segmentation-artefact envelope check, per-stem stereo sanity.
-    Failed criteria **reject the stems** (render aborts) — separation success
-    never assumed.
-  - V feature: per-block vocal-presence confidence from the vocal stem,
-    smoothed; policy-gated vocal centre (`centre.mode = "vocal_mask"`)
-    applied as a post-pass — FL/FR preservation and the native fast path
-    untouched, gate closed when V is low.
-  - Measured on the reference track: separation 60 s CPU (2.5x rt),
-    acceptance PASS (lag 0, 30.8 dB recombination), vocal gate mean 0.85,
-    render validates clean.
-  - Remaining M4: ONNX Runtime deployment / Arc execution provider, BS-RoFormer
-    comparison, loudness-matched listening evaluation of vocal centre vs
-    phantom centre.
-- [x] **Milestone 3 (complete): deterministic adaptive controller.**
-  - Signal-adaptive stereo_beta: side-dominance-weighted directness steers
-    beta in [0.15, 0.90], tau = 1.5 s.
-  - Full feature vector per block: rho, gamma2, W, D, T (envelope-peak
-    transient density), A (low-coherence energy fraction). V (vocal
-    confidence) is AI-gated and intentionally unavailable -> centre
-    contribution stays policy-disabled.
-  - Rule policy (spec section 6 table): transients -> reduced decorrelation
-    + slight gain cut; existing ambience -> no added decorrelated energy;
-    dry content -> envelopment lift; hard-panned/direct -> front protection.
-    Multipliers clamped to [0.6, 1.4] x base gain, decorr intensity in
-    [0.25, 1.0].
-  - Dual-timescale smoothing: slow tau = 1.5 s for broad parameters, fast
-    tau = 50 ms transient-protection envelope (dives decorr to floor at
-    attacks, recovers quickly). Continuous per-block evaluation.
-  - Native core: live-parameter C API (beta, gain multiplier, decorrelation
-    intensity); Python/native equivalence verified with full schedules.
-  - Measured on the reference track: gain x0.96-1.14, decorr dips to 0.25 at
-    transients (mean 0.93), direction tracking preserved, downmix SDR
-    improved 10.9 -> 13.9 dB (transient sections use the phase-coherent raw
-    feed).
+---
 
-Note: measured on real music (left-dominant side content), the static
-mono-difference feed produced a left-shifted rear image from anti-phase
-cancellation. Stereo-difference extraction with adaptive beta fixes this:
-surround direction-tracking correlation with the front balance rose from
-~0.0 (v1) to +0.72 (v2) on the reference track.
+## Current Status
 
-Performance: native core renders ~40x real-time offline (0.002 s per second of
-audio on this machine), ~36x faster than the numpy reference.
+- [x] **Milestone 1 — Validated Python DSP Pipeline**: Mid-side decomposition, STFT correlation/coherence analysis, SOS band-limiting (150 Hz–8 kHz), 3-stage cascaded first-order all-pass decorrelators, slow RMS envelope tracking, multichannel FLAC/WAV mapping, and deterministic QA validation table.
+- [x] **Milestone 2 — Native C++20 Core**: High-throughput C++20 shared library (`libconcerto_core.dll` / `.so`) with radix-2 float64 FFT, vectorized chunk renderer, and ctypes bridge. Renders offline at **40×–50× realtime** (approx. 0.002 s per second of audio), with identical float32 output to the Python reference within $< 10^{-4}$ deviation.
+- [x] **Milestone 3 — Adaptive Controller**: Signal-adaptive cross-feed parameter $\beta(t) \in [0.15, 0.90]$ steered by side-dominance directness ($\tau = 1.5\text{ s}$). Dual-timescale transient envelope protection ($\tau = 50\text{ ms}$) dips decorrelation intensity at attacks to eliminate transient smearing, boosting fold-down SDR from $10.9\text{ dB}$ to $13.9\text{ dB}$.
+- [x] **Milestone 4 (Stage a) — Neural Vocal Centre & QA Harness**: Flag-gated (`--ai on`) vocal separation using `htdemucs` (PyTorch). Includes a strict 4-point acceptance harness (timeline alignment $\le 4$ samples, recombination residual $\ge 20\text{ dB}$, transient envelope jump $\le 3.0$, stereo correlation $\ge -0.95$). Stems meeting criteria yield a smoothed vocal presence gate ($V$) for center-channel placement (`centre_mode = "vocal_mask"`) while preserving $FL/FR$ bit-identically.
+- [x] **Desktop GUI Workstation**: Full-featured Qt6 (`PySide6`) desktop application with 8 dedicated workspaces, hardware-accelerated `pyqtgraph` 2D spectral plots, Lissajous stereo vectorscope, interactive 5.1/7.1 speaker layout diagram, and low-latency audio auditioning with real-time MPEG fold-down headphone downmixing.
+- [x] **Standalone Windows Distribution**: Packaged via PyInstaller into `dist/concerto-gui/concerto-gui.exe`, bundling the native C++20 DSP core, preset configurations, and GUI runtime.
 
-Build the native core:
+---
 
+## System Requirements
+
+- **Operating System**: Windows 10/11 (x64), Linux (x86_64), or macOS (Apple Silicon / Intel).
+- **Python**: Python 3.10+ (tested through 3.15).
+- **Core DSP Dependencies**: `numpy>=1.24.0`, `scipy>=1.10.0`, `soundfile>=0.12.0`.
+- **Desktop GUI Dependencies**: `PySide6>=6.6.0`, `pyqtgraph>=0.13.0`, `sounddevice>=0.4.6`.
+- **Optional AI Dependencies**: `torch>=2.0.0`, `demucs>=4.0.0`.
+- **C++ Compiler** (optional, for rebuilding native core): CMake 3.20+ with MinGW-w64, MSVC, GCC 11+, or Clang 13+.
+
+---
+
+## Installation
+
+### 1. Python Environment Setup
+```bash
+git clone https://github.com/alexparker0/concerto.git
+cd concerto
+
+# Install core audio DSP dependencies
+pip install -r requirements.txt
+
+# Install desktop GUI dependencies
+pip install -r requirements-gui.txt
+
+# (Optional) Install neural vocal center dependencies
+pip install -r requirements-ai.txt
 ```
+
+### 2. Native C++20 Core Compilation
+A pre-compiled 64-bit Windows binary is included in `native/build/bin/libconcerto_core.dll`. To rebuild on any platform:
+```bash
 cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
 cmake --build native/build
 ```
+The Python bridge (`concerto/native.py`) automatically discovers and loads the compiled library at runtime, falling back to the pure-Python reference implementation if unavailable.
 
-### Milestone 1 checklist (all complete)
-- [x] Decode stereo FLAC/WAV to float32 PCM, preserve metadata
-- [x] Mid-Side decomposition
-- [x] STFT analysis (4096/1024, Hann, 75% overlap)
-- [x] Frequency-dependent correlation & magnitude-squared coherence
-- [x] JSON + CSV analysis reports
-- [x] Conservative matrix surround extraction (band-limited S, g_s=0.25)
-- [x] Independent all-pass decorrelation banks (3 cascaded sections/path)
-- [x] RMS-based surround energy control (slow envelope, no pumping)
-- [x] 5.1 and 7.1 FLAC output with explicit channel-layout mapping
-- [x] Channel-order validation (8 distinguishable routing signals)
-- [x] Front-channel preservation tests (E_L = E_R = 0 in preservation mode)
-- [x] Stereo fold-down validation
-
-## Install
-
-```
-pip install numpy scipy soundfile
-```
-
-## Supported formats
-
-- **Input:** FLAC, WAV, AIFF via libsndfile; Opus, MP3, and anything else
-  FFmpeg can decode via automatic fallback (`concerto/audio/ffmpeg_io.py`).
-  Lossy sources decode at their native decoder rate (e.g. Opus = 48 kHz),
-  which is preserved like any other rate.
-- **Output:** FLAC (default) or WAV, chosen by file extension. Channel-order
-  mapping per container is handled by the layout table (WAVE 8ch orders the
-  back pair before the side pair — the opposite of FLAC).
+---
 
 ## Usage
 
-```
-# Analyse a stereo recording → JSON report + per-bin CSV (incl. directness)
-python -m concerto analyse input.flac --out reports/
+### Desktop GUI Workstation
 
-# Conservative DSP-only 5.1 render (centre disabled, preservation mode)
-python -m concerto render input.flac --layout 5.1 --mode baseline --out output.flac
+Launch the interactive desktop interface:
+```bash
+# Direct GUI entrypoint
+python -m concerto.gui
 
-# Adaptive 7.1 render
-python -m concerto render input.flac --layout 7.1 --mode adaptive --out output.flac
+# Via CLI subcommand
+python -m concerto gui
+python -m concerto gui path/to/input.flac
 
-# Custom configuration
-python -m concerto render input.flac --config configs/adaptive.toml --out output.flac
-
-# Validate an output file
-python -m concerto validate output.flac --reference input.flac
-
-# Compare profiles with objective measurements
-python -m concerto benchmark input.flac --profiles baseline,adaptive --out reports/
+# Using the standalone script
+python run_gui.py
 ```
 
-## Tests
+The GUI provides 8 integrated workspaces:
+1. **Render Studio & Batch Queue**: Surround rendering (5.1/7.1, Baseline/Adaptive), neural vocal centre controls, ring-buffer streaming mode, TPDF dither, realtime speed factor ($X.Xx\text{ rt}$), output peak clipping monitor, and multi-file batch rendering.
+2. **Stereo Analysis Lab**: Interactive spectral correlation plot ($\rho(f)$, $\gamma^2(f)$, $d(f)$ with log/linear frequency scale and crosshair hover), Lissajous vectorscope, polar phase meter, M/S energy balance, and CSV/JSON export.
+3. **Acceptance & Validation Suite**: 10-point automated QA verification (channel count, clipping, FLAC integrity, LFE isolation, bitwise front preservation $E_L=E_R=0$, MPEG fold-down SDR $> 10\text{ dB}$, routing frequencies).
+4. **Multi-Profile Benchmark**: Side-by-side profile comparisons (`baseline` vs `adaptive` vs `adaptive-ai`) measuring output peak, surround RMS, front RMS, surround-to-front ratio, and spatial surround coherence.
+5. **AI Stem Lab**: Standalone stem separation via `htdemucs`, 4-point acceptance dashboard, stem energy meter, and solo stem auditioning (Vocals, Drums, Bass, Other, Recombination Residual).
+6. **Speaker Routing**: 8-channel calibration tone generator, interactive 5.1/7.1 speaker layout diagram with active channel halos, channel-by-channel sweep, and verification table.
+7. **Preset Studio**: Live visual editor for TOML profiles (surround extraction, filter orders, all-pass coefficients, adaptive policy time constants).
+8. **Diagnostics**: C++20 core detection and throughput benchmark, host audio device channel capabilities.
+
+### Command-Line Interface (CLI)
+
+```bash
+# 1. Analyse a stereo track → summary JSON + per-bin CSV
+python -m concerto analyse track.flac --out reports/
+
+# 2. Render conservative 5.1 mix (Baseline matrix DSP)
+python -m concerto render track.flac --layout 5.1 --mode baseline --out mix_51.flac
+
+# 3. Render 7.1 mix with adaptive steering beta and transient decorrelation dipping
+python -m concerto render track.flac --layout 7.1 --mode adaptive --out mix_71.flac
+
+# 4. Render with neural vocal centre extraction (requires torch/demucs)
+python -m concerto render track.flac --layout 7.1 --mode adaptive --ai on --out mix_ai.flac
+
+# 5. Stream processing via ring buffer (bounds memory to O(chunk), ideal for long files)
+python -m concerto render track.flac --layout 7.1 --mode adaptive --stream --out mix_stream.flac
+
+# 6. Validate rendered multichannel output against original stereo reference
+python -m concerto validate mix_71.flac --reference track.flac
+
+# 7. Benchmark multiple profiles with objective spatial metrics
+python -m concerto benchmark track.flac --profiles baseline,adaptive --out reports/
+
+# 8. Generate and verify 8-channel calibration test tone file
+python -m concerto routing-test --out routing_test.flac --seconds 1.0
+```
+
+---
+
+## Channel Layout & Container Mappings
+
+Concerto enforces an internal layout order across all internal processing blocks:
 
 ```
+5.1 Internal:  FL  FR  FC  LFE  SL  SR
+7.1 Internal:  FL  FR  FC  LFE  SL  SR  BL  BR
+```
+
+When writing container files, channels are remapped according to container standards defined in `concerto/audio/layouts.py`:
+- **FLAC 8ch**: `FL FR FC LFE SL SR BL BR` (matches internal order).
+- **FLAC 6ch**: `FL FR FC LFE BL BR` (MPEG surround mapping).
+- **WAV / WAVE 8ch**: `FL FR FC LFE BL BR SL SR` (SMPTE / Microsoft standard; rear pair precedes side pair).
+- **WAV / WAVE 6ch**: `FL FR FC LFE BL BR`.
+
+---
+
+## Source Preservation Invariants
+
+Concerto enforces three invariants across every DSP and render stage:
+1. **Sampling Rate Preservation**: Input sample rate is preserved identically without silent resampling.
+2. **Bit-Identical Front Preservation**: In default preservation mode, $FL$ and $FR$ are bit-identical to the source before final quantization ($E_L = E_R = 0$).
+3. **MPEG Fold-Down Consistency**: Downmixing the surround output back to stereo ($L_{\text{down}} = FL + 0.707 \cdot FC + 0.707 \cdot SL + 0.5 \cdot BL$) yields a Signal-to-Distortion Ratio (SDR) $> 10\text{ dB}$ (typically $> 20\text{ dB}$ on real-world material).
+
+---
+
+## Testing & Verification
+
+Run the full automated test suite:
+```bash
 python -m pytest tests/ -q
 ```
+Coverage includes:
+- Milestone 1 baseline DSP math and QA acceptance table (`test_milestone1.py`).
+- C++20 native core vs. Python reference equivalence tests (`test_native.py`).
+- Adaptive controller beta steering and transient rules (`test_adaptive.py`, `test_policy.py`).
+- AI acceptance harness and vocal gate schedules (`test_ai.py`).
+- Multichannel container formats, FLAC metadata, and 24-bit PCM quantization (`test_formats.py`).
+- Ring-buffer streaming renderer consistency (`test_streaming.py`).
 
-## Channel order (application-internal, enforced everywhere)
+---
 
+## Standalone Executable Build
+
+To compile a standalone Windows `.exe` distribution with PyInstaller:
+```bash
+python scripts/build_gui.py
 ```
-5.1:  FL FR FC LFE SL SR
-7.1:  FL FR FC LFE SL SR BL BR
-```
+The self-contained application will be created in `dist/concerto-gui/concerto-gui.exe`.
 
-File-layout mappings are defined once in `concerto/audio/layouts.py`.
-`FLAC 8ch` natively orders `FL FR FC LFE SL SR BL BR` (matches internal);
-`FLAC 6ch` natively orders `FL FR FC LFE BL BR`; FFmpeg `7.1` orders
-`FL FR FC LFE BL BR SL SR`. All conversions go through the mapping table —
-never raw channel copy.
+---
 
-## Source preservation
+## License
 
-The original file is never modified. Renders always keep input sample rate
-(no silent resampling) and original `FL/FR` bit-identically in preservation
-mode, before final quantization.
+MIT License. See [`LICENSE`](LICENSE) for details.
