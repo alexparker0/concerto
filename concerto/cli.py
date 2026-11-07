@@ -232,25 +232,71 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     profiles = [p.strip() for p in args.profiles.split(",") if p.strip()]
     buf, meta = decode_stereo(args.input)
     results = {}
+    repo_root = Path(__file__).resolve().parent.parent
     for profile in profiles:
-        cfg_path = Path("configs") / f"{profile}.toml"
-        cfg = load_config(cfg_path if cfg_path.exists() else DEFAULT_CFG)
+        prof_clean = profile.lower().strip()
+        cfg_filename = "default.toml" if prof_clean in ("baseline", "default") else f"{prof_clean}.toml"
+        candidates = [
+            Path("configs") / cfg_filename,
+            repo_root / "configs" / cfg_filename,
+            Path(cfg_filename),
+        ]
+        cfg_path = candidates[0]
+        for c in candidates:
+            if c.is_file():
+                cfg_path = c
+                break
+        cfg = load_config(cfg_path if cfg_path.is_file() else DEFAULT_CFG)
         cfg["layout"] = args.layout
-        cfg["adaptive"] = profile == "adaptive"
+        is_adaptive = prof_clean in ("adaptive", "adaptive-ai")
+        cfg["adaptive"] = is_adaptive
+        cfg["adaptive_beta"] = is_adaptive
+        if prof_clean == "baseline":
+            cfg["centre_mode"] = "disabled"
+        elif prof_clean == "adaptive-ai":
+            cfg["centre_mode"] = "vocal_mask"
+
+        schedules = None
+        if is_adaptive and cfg.get("adaptive_beta"):
+            from .adaptive import (AdaptiveBetaConfig, PolicyConfig,
+                                   compute_adaptive_schedules)
+            bcfg = AdaptiveBetaConfig(
+                enabled=True,
+                beta_min=float(cfg.get("beta_min", 0.15)),
+                beta_max=float(cfg.get("beta_max", 0.90)),
+                tau_s=float(cfg.get("beta_tau_s", 1.5)),
+            )
+            pcfg = PolicyConfig(
+                tau_s=float(cfg.get("transition_tau_s", 1.5)),
+                transient_tau_s=float(cfg.get("transient_tau_s", 0.05)),
+            )
+            schedules = compute_adaptive_schedules(
+                buf.left, buf.right, buf.sample_rate, bcfg, pcfg
+            )
+
         renderer = make_renderer(buf.sample_rate, cfg)
-        primary = renderer.render(buf.left, buf.right)
+        primary = renderer.render(
+            buf.left, buf.right,
+            beta_schedule=(schedules or {}).get("beta"),
+            gain_schedule=(schedules or {}).get("gain"),
+            decorr_schedule=(schedules or {}).get("decorr"),
+        )
         out = primary if cfg["layout"] == "7.1" else derive_5_1_from_7_1(primary)
         out_path = Path(args.out) / f"{Path(args.input).stem}_{profile}.flac"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         encode_flac(out.channels, buf.sample_rate, out.layout_name, str(out_path),
                     bit_depth=cfg["bit_depth"])
-        rep = correlation_report(buf.left, buf.right, buf.sample_rate, AnalysisSettings())
-        bands = band_average(rep)
-        # Objective measurements per profile
+
         idx = {lbl: i for i, lbl in enumerate(
             list(INTERNAL_7_1.order) if out.n_channels == 8 else list(INTERNAL_5_1.order))}
-        _, sr_rms = measure(out.channels[idx["SR"]])
-        _, l_rms = measure(out.channels[idx["FL"]])
+        sl_ch = out.channels[idx["SL"]]
+        sr_ch = out.channels[idx["SR"]]
+        fl_ch = out.channels[idx["FL"]]
+        _, sr_rms = measure(sr_ch)
+        _, l_rms = measure(fl_ch)
+
+        rep = correlation_report(sl_ch, sr_ch, buf.sample_rate, AnalysisSettings())
+        bands = band_average(rep)
         results[profile] = {
             "output": str(out_path),
             "peak": round(out.peak(), 6),

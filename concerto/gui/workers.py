@@ -469,19 +469,58 @@ class BenchmarkWorker(QThread):
             buf, meta = decode_stereo(self.input_path)
             results = {}
             total_prof = len(self.profiles)
-            default_cfg = Path(__file__).resolve().parent.parent.parent / "configs" / "default.toml"
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            default_cfg = repo_root / "configs" / "default.toml"
 
             for idx, profile in enumerate(self.profiles):
                 self.progress_signal.emit(idx, total_prof, f"Benchmarking profile: {profile}")
-                cfg_path = Path("configs") / f"{profile}.toml"
-                if not cfg_path.exists():
-                    cfg_path = default_cfg
-                cfg = load_config(cfg_path)
+                prof_clean = profile.lower().strip()
+                cfg_filename = "default.toml" if prof_clean in ("baseline", "default") else f"{prof_clean}.toml"
+                candidates = [
+                    Path("configs") / cfg_filename,
+                    repo_root / "configs" / cfg_filename,
+                    Path(cfg_filename),
+                ]
+                cfg_path = candidates[0]
+                for c in candidates:
+                    if c.is_file():
+                        cfg_path = c
+                        break
+                cfg = load_config(cfg_path if cfg_path.is_file() else default_cfg)
                 cfg["layout"] = self.layout
-                cfg["adaptive"] = profile == "adaptive"
+                is_adaptive = prof_clean in ("adaptive", "adaptive-ai")
+                cfg["adaptive"] = is_adaptive
+                cfg["adaptive_beta"] = is_adaptive
+                if prof_clean == "baseline":
+                    cfg["centre_mode"] = "disabled"
+                elif prof_clean == "adaptive-ai":
+                    cfg["centre_mode"] = "vocal_mask"
+
+                schedules = None
+                if is_adaptive and cfg.get("adaptive_beta"):
+                    from ..adaptive import (AdaptiveBetaConfig, PolicyConfig,
+                                           compute_adaptive_schedules)
+                    bcfg = AdaptiveBetaConfig(
+                        enabled=True,
+                        beta_min=float(cfg.get("beta_min", 0.15)),
+                        beta_max=float(cfg.get("beta_max", 0.90)),
+                        tau_s=float(cfg.get("beta_tau_s", 1.5)),
+                    )
+                    pcfg = PolicyConfig(
+                        tau_s=float(cfg.get("transition_tau_s", 1.5)),
+                        transient_tau_s=float(cfg.get("transient_tau_s", 0.05)),
+                    )
+                    schedules = compute_adaptive_schedules(
+                        buf.left, buf.right, buf.sample_rate, bcfg, pcfg
+                    )
 
                 renderer = make_renderer(buf.sample_rate, cfg)
-                primary = renderer.render(buf.left, buf.right)
+                primary = renderer.render(
+                    buf.left, buf.right,
+                    beta_schedule=(schedules or {}).get("beta"),
+                    gain_schedule=(schedules or {}).get("gain"),
+                    decorr_schedule=(schedules or {}).get("decorr"),
+                )
                 out = primary if self.layout == "7.1" else derive_5_1_from_7_1(primary)
 
                 out_path = Path(self.out_dir) / f"{Path(self.input_path).stem}_{profile}.flac"
@@ -489,13 +528,17 @@ class BenchmarkWorker(QThread):
                 encode_flac(out.channels, buf.sample_rate, out.layout_name, str(out_path),
                             bit_depth=cfg.get("bit_depth", 24))
 
-                rep = correlation_report(buf.left, buf.right, buf.sample_rate, AnalysisSettings())
-                bands = band_average(rep)
-
                 channel_order = list(INTERNAL_7_1.order) if out.n_channels == 8 else list(INTERNAL_5_1.order)
                 lbl_idx = {lbl: i for i, lbl in enumerate(channel_order)}
-                _, sr_rms = measure(out.channels[lbl_idx["SR"]])
-                _, l_rms = measure(out.channels[lbl_idx["FL"]])
+                sl_ch = out.channels[lbl_idx["SL"]]
+                sr_ch = out.channels[lbl_idx["SR"]]
+                fl_ch = out.channels[lbl_idx["FL"]]
+                _, sr_rms = measure(sr_ch)
+                _, l_rms = measure(fl_ch)
+
+                # Compute correlation on rendered surround channels to reflect spatial profile differences
+                rep = correlation_report(sl_ch, sr_ch, buf.sample_rate, AnalysisSettings())
+                bands = band_average(rep)
 
                 results[profile] = {
                     "output": str(out_path),
@@ -505,7 +548,6 @@ class BenchmarkWorker(QThread):
                     "stereo_bands": [{"band": b, "rho": round(float(r), 4), "coherence": round(float(c), 4)}
                                      for b, r, c in bands],
                 }
-
             summary_path = Path(self.out_dir) / f"{Path(self.input_path).stem}_benchmark.json"
             summary_path.write_text(json.dumps(results, indent=2))
 
