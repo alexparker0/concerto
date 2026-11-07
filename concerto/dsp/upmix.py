@@ -79,6 +79,13 @@ def load_config(path: str | Path) -> dict:
                     break
     with open(p, "rb") as fh:
         raw = tomllib.load(fh)
+    out, sur, dec, cen, adv = (
+        raw.get("output", {}),
+        raw.get("surround", {}),
+        raw.get("decorrelation", {}),
+        raw.get("centre", {}),
+        raw.get("adaptive", {}),
+    )
     return {
         "layout": out.get("layout", "7.1"),
         "bit_depth": out.get("bit_depth", 24),
