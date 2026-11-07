@@ -96,28 +96,19 @@ class MainWindow(QMainWindow):
         )
         header_layout.addWidget(self.native_badge)
 
-        from ..ai.separation import get_available_execution_providers
+        try:
+            import torch
+            torch_device = "CUDA GPU" if torch.cuda.is_available() else "CPU"
+            ai_text = f"🧠 Demucs ({torch_device})"
+        except ImportError:
+            ai_text = "🧠 Demucs AI"
 
-        providers = get_available_execution_providers()
-        prov_name = "CPU"
-        for p in providers:
-            p_str = p[0] if isinstance(p, tuple) else str(p)
-            if "OpenVINO" in p_str:
-                prov_name = "Intel Arc / OpenVINO"
-                break
-            elif "Dml" in p_str:
-                prov_name = "DirectML (GPU)"
-                break
-            elif "CUDA" in p_str:
-                prov_name = "NVIDIA CUDA"
-                break
-
-        self.accel_badge = QLabel(f"🎮 {prov_name}", header)
-        self.accel_badge.setStyleSheet(
+        self.ai_badge = QLabel(ai_text, header)
+        self.ai_badge.setStyleSheet(
             "background-color: #1a2736; color: #61afef; border: 1px solid #284b63;"
             "border-radius: 12px; padding: 4px 12px; font-weight: bold; font-size: 11px;"
         )
-        header_layout.addWidget(self.accel_badge)
+        header_layout.addWidget(self.ai_badge)
 
         main_layout.addWidget(header)
 

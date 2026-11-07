@@ -162,68 +162,6 @@ class DiagnosticsTab(QWidget):
 
         layout.addWidget(native_box)
 
-        # 2. Hardware Acceleration & Neural Execution Providers Card
-        hw_box = QGroupBox("Neural Stem Acceleration & ONNX Runtime Providers")
-        hw_layout = QVBoxLayout(hw_box)
-        hw_layout.setContentsMargins(14, 16, 14, 14)
-        hw_layout.setSpacing(10)
-
-        hw_header = QHBoxLayout()
-        self.lbl_ort_version = QLabel("ONNX Runtime: Detecting...")
-        self.lbl_ort_version.setStyleSheet("font-weight: bold; color: #abb2bf;")
-        hw_header.addWidget(self.lbl_ort_version)
-
-        hw_header.addStretch()
-
-        btn_refresh_hw = QPushButton("Refresh Hardware")
-        btn_refresh_hw.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2c313a;
-                color: #abb2bf;
-                border: 1px solid #3e4451;
-                border-radius: 4px;
-                padding: 4px 10px;
-            }
-            QPushButton:hover {
-                background-color: #3e4451;
-            }
-            """
-        )
-        btn_refresh_hw.clicked.connect(self._refresh_hardware)
-        hw_header.addWidget(btn_refresh_hw)
-        hw_layout.addLayout(hw_header)
-
-        # Provider Status Table
-        self.table_providers = QTableWidget()
-        self.table_providers.setColumnCount(4)
-        self.table_providers.setHorizontalHeaderLabels([
-            "Execution Provider", "Target Hardware", "Active Status", "Recommendation / Notes"
-        ])
-        self.table_providers.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table_providers.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_providers.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_providers.verticalHeader().setVisible(False)
-        self.table_providers.setFixedHeight(150)
-        self.table_providers.setStyleSheet(
-            """
-            QTableWidget {
-                background-color: #181a1f;
-                border: 1px solid #2d3139;
-                color: #abb2bf;
-            }
-            QHeaderView::section {
-                background-color: #21252b;
-                color: #abb2bf;
-                font-weight: bold;
-                border: 1px solid #2d3139;
-                padding: 4px;
-            }
-            """
-        )
-        hw_layout.addWidget(self.table_providers)
-
-        layout.addWidget(hw_box)
 
         # 3. Audio Devices & Hardware Channel Enumeration Card
         audio_box = QGroupBox("Audio Output Devices & Multichannel Capability")
@@ -300,7 +238,6 @@ class DiagnosticsTab(QWidget):
     def refresh_all_diagnostics(self) -> None:
         """Run all diagnostic checks."""
         self._check_native_core()
-        self._refresh_hardware()
         self._refresh_audio_devices()
 
     def _check_native_core(self) -> None:
@@ -390,71 +327,6 @@ class DiagnosticsTab(QWidget):
             self.log_viewer.append_log(f"Build failed: {message}", "error")
             QMessageBox.warning(self, "Build Failed", f"Native compilation failed:\n{message}")
         self._check_native_core()
-
-    def _refresh_hardware(self) -> None:
-        """Query ONNX runtime and execution providers."""
-        try:
-            import onnxruntime as ort
-
-            v = ort.__version__
-            avail = set(ort.get_available_providers())
-            self.lbl_ort_version.setText(f"ONNX Runtime: v{v}")
-        except ImportError:
-            v = "Not Installed"
-            avail = set()
-            self.lbl_ort_version.setText("ONNX Runtime: Not Installed (pip install onnxruntime-directml)")
-
-        providers_meta = [
-            (
-                "OpenVINOExecutionProvider",
-                "Intel Arc GPU / NPU / Core Ultra",
-                "OpenVINOExecutionProvider" in avail,
-                "Optimal for Intel discrete & integrated GPUs and NPUs",
-            ),
-            (
-                "DmlExecutionProvider",
-                "DirectML (Intel Arc / AMD / NVIDIA)",
-                "DmlExecutionProvider" in avail,
-                "Universal cross-vendor hardware GPU acceleration on Windows",
-            ),
-            (
-                "CUDAExecutionProvider",
-                "NVIDIA RTX / CUDA GPUs",
-                "CUDAExecutionProvider" in avail,
-                "Requires CUDA Toolkit & cuDNN runtime",
-            ),
-            (
-                "CPUExecutionProvider",
-                "Host CPU (x86_64 AVX2 / SSE4.2)",
-                "CPUExecutionProvider" in avail,
-                "Deterministic baseline CPU fallback",
-            ),
-        ]
-
-        self.table_providers.setRowCount(len(providers_meta))
-        for row, (name, hw, active, notes) in enumerate(providers_meta):
-            item_name = QTableWidgetItem(name)
-            item_name.setFont(QFont("Courier New", 9))
-            self.table_providers.setItem(row, 0, item_name)
-
-            self.table_providers.setItem(row, 1, QTableWidgetItem(hw))
-
-            badge = QLabel("AVAILABLE" if active else "UNAVAILABLE")
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet(
-                f"""
-                background-color: {"#283c2e" if active else "#3e262c"};
-                color: {"#98c379" if active else "#e06c75"};
-                border: 1px solid {"#98c379" if active else "#e06c75"};
-                font-weight: bold;
-                font-size: 10px;
-                border-radius: 4px;
-                margin: 4px;
-                """
-            )
-            self.table_providers.setCellWidget(row, 2, badge)
-
-            self.table_providers.setItem(row, 3, QTableWidgetItem(notes))
 
     def _refresh_audio_devices(self) -> None:
         """Enumerate host sound devices via sounddevice."""

@@ -284,10 +284,7 @@ class RenderTab(QWidget):
         ai_opts_layout.addWidget(QLabel("Neural Model:"), 0, 0)
         self.combo_model = QComboBox()
         self.combo_model.addItems([
-            "BS-Roformer-Viperx-1297.onnx",
-            "melband.onnx",
             "htdemucs (PyTorch)",
-            "Custom ONNX Model...",
         ])
         self.combo_model.currentIndexChanged.connect(self._on_model_changed)
         ai_opts_layout.addWidget(self.combo_model, 0, 1)
@@ -566,13 +563,7 @@ class RenderTab(QWidget):
             self.chk_streaming.setChecked(False)
 
     def _on_model_changed(self) -> None:
-        if self.combo_model.currentText() == "Custom ONNX Model...":
-            model_path, _ = QFileDialog.getOpenFileName(
-                self, "Select ONNX Model File", "", "ONNX Model (*.onnx);;All Files (*.*)"
-            )
-            if model_path:
-                self.combo_model.setItemText(self.combo_model.currentIndex(), Path(model_path).name)
-                self.combo_model.setToolTip(model_path)
+        pass
 
     def _on_vocal_gain_changed(self, value: int) -> None:
         db = value / 10.0
@@ -625,22 +616,8 @@ class RenderTab(QWidget):
 
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
 
-        # Resolve model path
+        # Model path (alpha uses htdemucs)
         onnx_model_arg: str | None = None
-        if ai_str == "on":
-            sel_model = self.combo_model.currentText()
-            if "onnx" in sel_model.lower():
-                cand_names = [sel_model.split()[0], "BS-Roformer-Viperx-1297.onnx", "melband.onnx"]
-                for name in cand_names:
-                    for p in (Path(name), repo_root / name):
-                        if p.is_file():
-                            onnx_model_arg = str(p)
-                            break
-                    if onnx_model_arg:
-                        break
-                if not onnx_model_arg:
-                    onnx_model_arg = sel_model.split()[0]
-
         # Load base configuration with guaranteed default fallback
         preset_name = self.combo_preset.currentText()
         if preset_name == "Custom TOML...":

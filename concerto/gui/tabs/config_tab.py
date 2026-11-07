@@ -550,7 +550,7 @@ class ConfigTab(QWidget):
 
         grid_a.addWidget(QLabel("Default Model:"), 1, 0)
         self.combo_ai_model = QComboBox()
-        self.combo_ai_model.addItems(["htdemucs", "BS-Roformer", "melband"])
+        self.combo_ai_model.addItems(["htdemucs"])
         self.combo_ai_model.currentIndexChanged.connect(self._on_ui_changed)
         grid_a.addWidget(self.combo_ai_model, 1, 1)
         layout.addWidget(box_ai)

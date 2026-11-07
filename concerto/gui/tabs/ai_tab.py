@@ -366,34 +366,11 @@ class AiTab(QWidget):
 
         self.combo_model = QComboBox()
         self.combo_model.addItems([
-            "BS-Roformer-Viperx-1297.onnx (Default ONNX)",
-            "melband.onnx (MelBand Roformer)",
-            "htdemucs (Demucs Hybrid Transformer)",
-            "Custom ONNX Model File...",
+            "htdemucs (Demucs Hybrid Transformer - PyTorch)",
         ])
-        self.combo_model.currentIndexChanged.connect(self._on_model_changed)
         model_row.addWidget(self.combo_model, 1)
-
         self.txt_custom_model = QLineEdit()
-        self.txt_custom_model.setPlaceholderText("Path to custom .onnx model...")
         self.txt_custom_model.setVisible(False)
-        model_row.addWidget(self.txt_custom_model, 2)
-
-        self.btn_browse_model = QPushButton("Select Model...")
-        self.btn_browse_model.setVisible(False)
-        self.btn_browse_model.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #2c313a;
-                color: #abb2bf;
-                border: 1px solid #3e4451;
-                border-radius: 4px;
-                padding: 4px 10px;
-            }
-            """
-        )
-        self.btn_browse_model.clicked.connect(self._browse_custom_model)
-        model_row.addWidget(self.btn_browse_model)
 
         src_layout.addLayout(model_row, 1, 1, 1, 2)
 
@@ -644,9 +621,7 @@ class AiTab(QWidget):
         self._audio_player.error_signal.connect(self._on_player_error)
 
     def _on_model_changed(self, index: int) -> None:
-        is_custom = index == 3
-        self.txt_custom_model.setVisible(is_custom)
-        self.btn_browse_model.setVisible(is_custom)
+        pass
 
     def _browse_input(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -657,17 +632,6 @@ class AiTab(QWidget):
         )
         if path:
             self.txt_input.setText(path)
-
-    def _browse_custom_model(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Custom ONNX Model",
-            "",
-            "ONNX Models (*.onnx);;All Files (*.*)",
-        )
-        if path:
-            self.txt_custom_model.setText(path)
-
     def _start_evaluation(self) -> None:
         input_path = self.txt_input.text().strip()
         if not input_path or not Path(input_path).exists():
@@ -677,23 +641,7 @@ class AiTab(QWidget):
         # Stop any active auditioning
         self._stop_audition()
 
-        repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        model_idx = self.combo_model.currentIndex()
         onnx_model: str | None = None
-        if model_idx == 0:
-            p = repo_root / "BS-Roformer-Viperx-1297.onnx"
-            onnx_model = str(p) if p.is_file() else "BS-Roformer-Viperx-1297.onnx"
-        elif model_idx == 1:
-            p = repo_root / "melband.onnx"
-            onnx_model = str(p) if p.is_file() else "melband.onnx"
-        elif model_idx == 2:
-            onnx_model = None  # Demucs
-        elif model_idx == 3:
-            custom_p = self.txt_custom_model.text().strip()
-            if not custom_p or not Path(custom_p).exists():
-                QMessageBox.warning(self, "Custom Model", "Please select a valid custom .onnx model.")
-                return
-            onnx_model = custom_p
         no_cache = self.chk_no_cache.isChecked()
 
         # Update UI state
