@@ -1,0 +1,9 @@
+# Concerto — Optional AI & Neural Separation Dependencies
+-r requirements.txt
+
+# ONNX Runtime with Windows DirectML (Universal Intel Arc, AMD, NVIDIA GPU acceleration)
+onnxruntime-directml>=1.16.0
+
+# Optional PyTorch & Demucs fallback
+torch>=2.0.0
+demucs>=4.0.0

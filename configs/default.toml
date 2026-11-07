@@ -1,0 +1,54 @@
+# Concerto default configuration (Milestone 1 baseline)
+
+[output]
+layout = "7.1"            # "5.1" or "7.1"
+bit_depth = 24            # FLAC output bit depth
+preserve_front = true     # FL/FR bit-identical to input before quantization
+
+[surround]
+gain = 0.25               # g_s, ~ -12 dB amplitude
+extraction = "stereo_difference"  # "mono_difference" | "stereo_difference"
+stereo_beta = 0.25        # cross-feed leakage for stereo_difference
+highpass_hz = 150.0       # band-limit of surround feeds
+lowpass_hz = 8000.0
+filter_order = 4          # Butterworth SOS section order (per edge)
+target_rms_ratio = 0.35   # surround RMS / stereo RMS target
+rms_window_s = 0.400      # RMS measurement window
+gain_tau_s = 2.0          # slow gain-envelope time constant
+gain_min = 0.0
+gain_max = 2.0
+
+[decorrelation]
+enabled = true
+sections = 3              # cascaded first-order all-pass sections per path
+# |a| < 1 required for stability; per-path coefficient sets are independent
+a_left  = [0.68, -0.41, 0.23]
+a_right = [-0.55, 0.37, -0.19]
+a_back_l = [0.31, -0.62, 0.44]
+a_back_r = [-0.29, 0.48, -0.57]
+
+[centre]
+mode = "disabled"         # "disabled" | "mid_fill" | "vocal_mask" (needs --ai on)
+mid_fill_gain = 0.3548
+vocal_gain_db = -6.0
+
+[ai]
+enabled = false
+model = "htdemucs"    # ~ -9 dB relative to M
+
+[adaptive]
+enabled = false           # Milestone 1 baseline uses static parameters
+transition_tau_s = 2.0
+transient_tau_s = 0.050
+beta_adaptive = false     # signal-adaptive stereo_beta (Milestone 3)
+beta_min = 0.15
+beta_max = 0.90
+beta_tau_s = 1.5
+
+[lfe]
+enabled = false
+
+[analysis]
+fft_size = 4096
+hop_size = 1024
+window = "hann"

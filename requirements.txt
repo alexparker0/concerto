@@ -1,0 +1,17 @@
+# Concerto — Stereo-to-Surround Upmixing Engine
+# Core DSP & Audio I/O dependencies
+numpy>=1.24.0
+scipy>=1.10.0
+soundfile>=0.12.0
+
+# Acceptance testing & benchmarking
+pytest>=7.4.0
+
+# AI Stem Separation & Neural Vocal Center (Optional)
+# For cross-vendor GPU acceleration (Intel Arc, AMD, NVIDIA on Windows via DirectML):
+#   onnxruntime-directml>=1.16.0
+# For native Intel Arc GPU/NPU acceleration via OpenVINO:
+#   onnxruntime-openvino>=1.16.0
+# For PyTorch / Demucs CPU/CUDA fallback:
+#   torch>=2.0.0
+#   demucs>=4.0.0

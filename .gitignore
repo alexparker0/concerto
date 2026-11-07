@@ -1,0 +1,15 @@
+# Build artifacts
+native/build/
+native/tests/*.exe
+*.pyc
+__pycache__/
+.pytest_cache/
+reports/
+.concerto_cache/
+*.onnx
+.tmp-pyyaml/
+dist/
+build/
+*.spec
+routing_test.flac
+demo_stereo.flac

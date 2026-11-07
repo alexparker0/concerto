@@ -1,0 +1,55 @@
+# Adaptive profile: conservative static policy standing in for the full
+# rule-based controller (Milestone 3). Same DSP chain as default.toml with
+# slightly more restrained surround and gentler decorrelation.
+
+[output]
+layout = "7.1"
+bit_depth = 24
+preserve_front = true
+
+[surround]
+gain = 0.22
+extraction = "stereo_difference"
+stereo_beta = 0.25
+highpass_hz = 180.0
+lowpass_hz = 7500.0
+filter_order = 4
+target_rms_ratio = 0.30
+rms_window_s = 0.400
+gain_tau_s = 2.5
+gain_min = 0.0
+gain_max = 1.6
+
+[decorrelation]
+enabled = true
+sections = 3
+a_left  = [0.62, -0.35, 0.18]
+a_right = [-0.50, 0.32, -0.15]
+a_back_l = [0.26, -0.55, 0.38]
+a_back_r = [-0.24, 0.42, -0.50]
+
+[centre]
+mode = "disabled"         # "disabled" | "mid_fill" | "vocal_mask" (needs --ai on)
+mid_fill_gain = 0.3548
+vocal_gain_db = -6.0      # vocal centre level when mode = vocal_mask
+
+[ai]
+enabled = false           # high cost - CLI --ai on overrides at runtime
+model = "htdemucs"
+
+[adaptive]
+enabled = true
+transition_tau_s = 2.0
+transient_tau_s = 0.050
+beta_adaptive = true
+beta_min = 0.15
+beta_max = 0.90
+beta_tau_s = 1.5
+
+[lfe]
+enabled = false
+
+[analysis]
+fft_size = 4096
+hop_size = 1024
+window = "hann"
