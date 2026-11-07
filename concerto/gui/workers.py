@@ -405,11 +405,11 @@ class AnalysisWorker(QThread):
                 "rho_freq": rep.rho.tolist(),
                 "coherence_freq": rep.coherence.tolist(),
                 "directness_freq": rep.directness.tolist(),
-                "frequencies": rep.frequencies.tolist(),
+                "frequencies": rep.freqs.tolist(),
             }
 
             self.progress_signal.emit(100, 100, "Analysis complete")
-            self.finished_signal.emit(summary, csv_path, json_path)
+            self.finished_signal.emit(summary, str(csv_path), str(json_path))
         except Exception as e:
             self.error_signal.emit(str(e))
 
